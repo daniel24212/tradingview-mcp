@@ -1,0 +1,199 @@
+git clone https://github.com/tradesdontlie/tradingview-mcp.git ~/tradingview-mcp
+   cd ~/tradingview-mcp
+
+   npm install
+
+
+
+curl -s http://localhost:9222/json/version
+
+
+
+claude
+cd ~/tradingview-mcp && claude
+
+
+claude --mcp-debug
+----------------------------------------------------------
+powershell   Step 1 — Kill any existing Chrome:
+
+Stop-Process -Name chrome -Force
+
+-------------------------------------------------------------------------
+ powershell Step 2 — Launch Chrome with debug port and fresh profile:
+
+& "C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 --user-data-dir="C:\ChromeDebug" --app=https://www.tradingview.com
+
+ & "C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 --user-data-dir="C:\ChromeDebug" --app=https://www.tradingview.com
+
+-------------------------------------------------------------------------
+powershell  Step 3 — Set up the port proxy (run this every time after reboot):
+
+netsh interface portproxy add v4tov4 listenaddress=172.31.0.1 listenport=9222 connectaddress=127.0.0.1 connectport=9222
+
+
+---------------------------------------------------------------------------
+Step 4 — Verify from WSL:
+bash
+
+curl -s http://172.31.0.1:9222/json/version
+
+---------------------------------------------------------------------------------CDP is live! Now go to Claude Code and try your query. It should work now.
+Also, let me create that startup script so you never have to do this manually again. Run this in WSL:
+
+
+cat > ~/start-tradingview-cdp.ps1 << 'EOF'
+# Kill existing Chrome
+Stop-Process -Name chrome -Force -ErrorAction SilentlyContinue
+Start-Sleep 2
+
+# Launch Chrome with CDP
+Start-Process "C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 --user-data-dir="C:\ChromeDebug" --app=https://www.tradingview.com"
+Start-Sleep 3
+
+# Set up port proxy for WSL
+netsh interface portproxy delete v4tov4 listenaddress=172.31.0.1 listenport=9222
+netsh interface portproxy add v4tov4 listenaddress=172.31.0.1 listenport=9222 connectaddress=127.0.0.1 connectport=9222
+
+Write-Host "TradingView CDP ready on port 9222!"
+EOF
+
+k----------------------------------------
+
+Run this in WSL:
+-------------------------------------------------
+bashecho 'alias trading="cd ~/tradingview-mcp && claude"' >> ~/.bashrc
+source ~/.bashrc
+-------------------------------------
+Now every time you want to start your trading session, just type:
+bash:
+-------------
+trading
+-----------------
+And it will automatically go to the right folder and launch Claude Code with the TradingView MCP ready.
+
+Your complete startup routine from now on:
+
+1 Windows PowerShell (as Admin): Run start-tradingview-cdp.ps1
+2. WSL terminal: Type trading
+3  Done! 🚀
+
+
+   for oscar to respond       ~/oscar_listen.sh
+
+restart oscar
+# Terminal 1 — MCP server
+cd ~/tradingview-mcp && npm start
+
+# Terminal 2 — Oscar
+~/oscar_listen.sh
+
+----------------------------------------------------------------------------------------
+Just tell Oscar directly in your chat with him:
+
+"Run MTF analysis on ALICEUSDT.P mode reversal"
+
+Or if you want both reads at the same time:
+
+"Run MTF analysis on ALICEUSDT.P in both trend mode and reversal mode"
+
+And if you want the zone-based SL suggestion alongside it:
+
+"Run MTF analysis on ALICEUSDT.P mode reversal and suggest the best SL"
+
+That's it — no commands, no terminal. Just talk to Oscar naturally and he'll know what to do.
+
+
+For a buy setup at demand zone:
+
+"Run reversal mode buy on ALICEUSDT.P"
+
+Oscar will only look for demand zone bounces — supply zones are completely ignored.
+For a sell setup at supply zone:
+
+"Run reversal mode sell on ALICEUSDT.P"
+
+Oscar will only look for supply zone rejections — demand zones are completely ignored.
+For trend analysis (unchanged):
+
+"Run MTF analysis on ALICEUSDT.P"
+
+So your workflow is now:
+
+You spot price at a demand zone → tell Oscar "reversal mode buy"
+Oscar confirms on 1H + 15M and tells you if the bounce is valid
+If confirmed → Oscar suggests SL below the demand zone
+Log the trade → track performance
+
+Try it on ALICEUSDT.P and let me know what Oscar returns.You've used 75% of your weekly limitGet more usage
+
+
+claude code :1BKD3HWkvdhxJ50zuztDTzpPes44sQfXb39W6SdDczCZ2AYx#vfP7rcO7T_Y13XIP4bWRch1nFbQUKOOTrKP_IQ3Rmgw
+
+Oscar's work
+Oscar is fully upgraded. Here's the complete picture of what he now analyses on every signal:
+
+RSI (14) ✅
+EMA 50 + EMA 200 ✅
+Price structure (HH/HL) ✅
+MACD (12, 26, 9) ✅
+Volume dominance ✅
+Trendlines (support/resistance) ✅
+Demand/Supply zones ✅
+MTF confluence 1D→4H→1H→15M ✅
+No-trade windows ✅
+Zone-based SL ✅
+R:R minimum 1:3 ✅
+
+***********************************************************************************************************************************************************************
+*****cp /mnt/c/Users/CTSNETWORK/AppData/Roaming/Claude/local-agent-mode-sessions/e1953440-a72d-4c8a-861a-62853b2ad701/5646b936-b84f-4002-8880-3ce4ba7102c5/local_8331b7bc-e37a-4550-80d7-0ac941ab6fda/outputs/oscar_test.sh ~/oscar_test.sh
+chmod +x ~/oscar_test.sh
+bash ~/oscar_test.sh
+*****************************************************************************************************************************************************
+The script checks 12 things in order:
+
+Duplicate guard — confirms only 1 Oscar instance running
+CDP connection — verifies Chrome is reachable and TradingView tab exists
+MCP server — confirms Node.js MCP process is up
+rules.json — validates JSON, checks min_rr=3 and timeframes
+Backup files — verifies all 11 critical files exist in ~/oscar_backup/
+Core source files — confirms all .js files are in place with correct paths
+Bias module — unit test: RSI, EMA, MACD, Volume all returning values
+Zone detection — unit test: finds demand zone from mock data
+Trendline detection — unit test: support/resistance from mock data
+Trade logger — unit test: logs a trade and retrieves it
+Rules enforcement — unit test: R:R 1:3 passes, R:R 1:0.67 blocked, forex blocked on weekend
+Crontab — confirms @reboot auto-start is registered
+
+Paste the output back here and I'll fix anything that shows ❌.AskSonnet 4.6
+
+oscar data pipe line
+Telegram message
+      ↓
+oscar_listen.sh → calls Claude with MCP tools
+      ↓
+Claude calls getOhlcv() / quote_get
+      ↓
+MCP server sends JavaScript into Chrome via CDP
+      ↓
+Chrome runs it inside the TradingView tab
+      ↓
+TradingView's own chart data is read and returned
+      ↓
+Oscar analyzes REAL candles from whatever chart is open
+
+
+
+Your repo is live at: https://github.com/daniel24212/tradingview-mcp
+From now on, after any changes to Oscar just run:
+
+cd ~/tradingview-mcp
+git add -A
+git commit -m "describe what changed"
+git push origin main
+
+
+git ---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
+
+
+
