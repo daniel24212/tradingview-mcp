@@ -38,32 +38,53 @@ export async function getState({ _deps } = {}) {
 }
 
 export async function setSymbol({ symbol, _deps }) {
-  const { evaluateAsync, waitForChartReady } = _resolve(_deps);
+  const { evaluate, evaluateAsync, waitForChartReady } = _resolve(_deps);
+
+  // Snapshot current data feed state BEFORE switching
+  const before = await evaluate(`(() => {
+    try {
+      const ms   = window.TradingViewApi._activeChartWidgetWV.value()._chartWidget.model().mainSeries();
+      const bars = ms.bars();
+      const end  = bars.lastIndex();
+      const last = end >= 0 ? bars.valueAt(end) : null;
+      return { symbol: ms.symbol() || null, close: last ? last[4] : null, volume: last ? (last[5] || 0) : 0 };
+    } catch(e) { return { symbol: null, close: null, volume: 0 }; }
+  })()`).catch(() => ({ symbol: null, close: null, volume: 0 }));
+
   await evaluateAsync(`
     (function() {
       var chart = ${CHART_API};
       return new Promise(function(resolve) {
         chart.setSymbol(${safeString(symbol)}, {});
-        setTimeout(resolve, 500);
+        setTimeout(resolve, 800);
       });
     })()
   `);
-  const ready = await waitForChartReady(symbol);
+
+  const ready = await waitForChartReady(symbol, null, 15000, before);
   return { success: true, symbol, chart_ready: ready };
 }
 
+const TF_URL_MAP = {
+  '1D':'D','D':'D','4H':'240','240':'240',
+  '1H':'60','60':'60','15M':'15','15':'15','5M':'5','5':'5','1W':'W','W':'W',
+};
+
 export async function setTimeframe({ timeframe, _deps }) {
   const { evaluate, waitForChartReady } = _resolve(_deps);
-  await evaluate(`
-    (function() {
-      var chart = ${CHART_API};
-      chart.setResolution(${safeString(timeframe)}, {});
-    })()
-  `);
-  const ready = await waitForChartReady(null, timeframe);
+  let sym = 'BTCUSDT';
+  try {
+    sym = await evaluate(
+      `window.TradingViewApi._activeChartWidgetWV.value()._chartWidget.model().mainSeries().symbol()`
+    ) || 'BTCUSDT';
+  } catch(_) {}
+  const interval = TF_URL_MAP[timeframe] || timeframe;
+  const url = 'https://www.tradingview.com/chart/?symbol=' + encodeURIComponent(sym) + '&interval=' + interval;
+  await evaluate('window.location.href = ' + JSON.stringify(url));
+  await new Promise(r => setTimeout(r, 10000));
+  const ready = await waitForChartReady(null, timeframe, 15000, null);
   return { success: true, timeframe, chart_ready: ready };
 }
-
 export async function setType({ chart_type, _deps }) {
   const { evaluate } = _resolve(_deps);
   const typeMap = {

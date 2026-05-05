@@ -14,6 +14,10 @@ import { registerWatchlistTools } from './tools/watchlist.js';
 import { registerUiTools } from './tools/ui.js';
 import { registerPaneTools } from './tools/pane.js';
 import { registerTabTools } from './tools/tab.js';
+import { registerRulesTools } from './tools/rules.js';
+import { registerZoneTools } from './tools/rules.js';
+import { registerLoggerTools } from './tools/logger.js';
+import { onStartup } from './core/state.js';
 
 const server = new McpServer(
   {
@@ -84,6 +88,10 @@ registerWatchlistTools(server);
 registerUiTools(server);
 registerPaneTools(server);
 registerTabTools(server);
+onStartup();
+registerRulesTools(server);
+registerZoneTools(server);
+registerLoggerTools(server);
 
 // Startup notice (stderr so it doesn't interfere with MCP stdio protocol)
 process.stderr.write('⚠  tradingview-mcp  |  Unofficial tool. Not affiliated with TradingView Inc. or Anthropic.\n');

@@ -127,3 +127,71 @@ Claude Code ←→ MCP Server (stdio) ←→ CDP (localhost:9222) ←→ Trading
 ```
 
 Pine graphics path: `study._graphics._primitivesCollection.dwglines.get('lines').get(false)._primitivesDataById`
+
+## ⚠️ CRITICAL — NO HALLUCINATION RULE
+**NEVER generate price levels, entry points, stop losses, take profits, or any market analysis from training memory.**
+Every single price, level, and signal MUST come from live tool calls. If the tools fail, say so — do not substitute with remembered data.
+
+Before ANY analysis:
+1. Call `chart_set_symbol` to switch to the requested symbol
+2. Call `quote_get` IMMEDIATELY after — verify the live price matches what you expect
+3. If the live price differs significantly from what you remember — USE THE LIVE PRICE, not your memory
+4. Include the live price from `quote_get` in every signal output
+
+If you find yourself writing price levels without having called `quote_get` first — STOP and call the tools.
+
+## Signal Generation Workflow (MANDATORY)
+When asked to analyze a symbol or generate a signal, follow this exact sequence — no shortcuts:
+
+### Step 1 — Load the symbol
+- `chart_set_symbol` with the requested symbol
+- Wait 1.5 seconds for chart to load
+- `quote_get` → get live price (THIS IS THE ONLY VALID PRICE)
+
+### Step 2 — Check trade conditions
+- `rules_no_trade_check` → check for no-trade windows (FOMC, weekend forex block)
+- `rules_show` → confirm active ruleset (min R:R, timeframes, etc.)
+
+### Step 3 — Multi-timeframe analysis
+- `rules_mtf_analysis` with symbol and mode (trend or reversal)
+  - This cycles 1D → 4H → 1H → 15M automatically
+  - Returns STRONG BUY / BUY / WAIT / SELL / STRONG SELL with confluence score
+  - Includes RSI(14), EMA(50/200), MACD(12,26,9), Volume, trendlines on each timeframe
+
+### Step 4 — Zone-based stop loss
+- `rules_suggest_sl` with direction (buy or sell) → returns strongest zone SL
+- Never place SL manually — always use the zone-based suggestion
+
+### Step 5 — Validate the trade
+- `rules_check_trade` with entry, stop, target → validates R:R (min 1:3), no-trade window, bias
+- If verdict is BLOCKED → do not generate a signal, explain why
+- If verdict is CAUTION → generate signal with warning
+
+### Step 6 — Log the signal
+- `trade_log` → save every approved signal to the journal automatically
+
+### R:R Rules (ENFORCED)
+- Minimum R:R = 1:3 (risk 1 to make 3)
+- TP1 must be at least 3× the risk distance
+- Any signal with TP1 R:R below 1:3 is INVALID — do not output it
+
+### Mode Selection
+- Default: trend mode (follows 1D/4H macro bias)
+- When user says "reversal" or "bounce": use `mode: reversal, direction: buy/sell`
+- Reversal mode only looks at 1H + 15M and checks if price is at a zone
+
+## New Rules Tools Reference
+| Tool | Purpose |
+|------|---------|
+| `rules_mtf_analysis` | Full 1D→4H→1H→15M confluence with trendlines |
+| `rules_get_bias` | Single timeframe bias (RSI, EMA, MACD, Volume, trendlines) |
+| `rules_get_zones` | Detect all demand/supply zones with strength scores |
+| `rules_suggest_sl` | Best SL from strongest zone (buy=below demand, sell=above supply) |
+| `rules_check_trade` | Full pre-trade gate (no-trade + R:R + bias + zones) |
+| `rules_no_trade_check` | Check if current time/date is blocked |
+| `rules_validate_rr` | Validate entry/stop/target R:R ratio |
+| `rules_show` | Display full active ruleset |
+| `trade_log` | Save signal to journal |
+| `trade_update` | Update trade outcome |
+| `trade_history` | View recent trades |
+| `trade_performance` | Win rate, total R, performance by symbol |

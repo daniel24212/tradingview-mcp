@@ -67,6 +67,13 @@ export async function getOhlcv({ count, summary } = {}) {
       (function() {
         var bars = ${BARS_PATH};
         if (!bars || typeof bars.lastIndex !== 'function') return null;
+        // Extract symbol
+        var sym = '';
+        try { sym = window.TradingViewApi._activeChartWidgetWV.value()._chartWidget.model().mainSeries().symbol(); } catch(e) {}
+        // Extract timeframe/resolution
+        var tf = '';
+        try { tf = window.TradingViewApi._activeChartWidgetWV.value()._chartWidget.model().mainSeries().interval(); } catch(e) {}
+        if (!tf) { try { tf = window.TradingViewApi._activeChartWidgetWV.value()._chartWidget.getResolution(); } catch(e) {} }
         var result = [];
         var end = bars.lastIndex();
         var start = Math.max(bars.firstIndex(), end - ${limit} + 1);
@@ -74,7 +81,7 @@ export async function getOhlcv({ count, summary } = {}) {
           var v = bars.valueAt(i);
           if (v) result.push({time: v[0], open: v[1], high: v[2], low: v[3], close: v[4], volume: v[5] || 0});
         }
-        return {bars: result, total_bars: bars.size(), source: 'direct_bars'};
+        return {bars: result, total_bars: bars.size(), source: 'direct_bars', symbol: sym, timeframe: tf};
       })()
     `);
   } catch { data = null; }
@@ -103,7 +110,7 @@ export async function getOhlcv({ count, summary } = {}) {
     };
   }
 
-  return { success: true, bar_count: data.bars.length, total_available: data.total_bars, source: data.source, bars: data.bars };
+  return { success: true, bar_count: data.bars.length, total_available: data.total_bars, source: data.source, symbol: data.symbol || null, timeframe: data.timeframe || null, bars: data.bars };
 }
 
 export async function getIndicator({ entity_id }) {

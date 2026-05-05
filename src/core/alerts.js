@@ -4,10 +4,12 @@
 import { evaluate, evaluateAsync, getClient, safeString } from '../connection.js';
 
 export async function create({ condition, price, message }) {
+  // Try opening via button click first
   const opened = await evaluate(`
     (function() {
-      var btn = document.querySelector('[aria-label="Create Alert"]')
-        || document.querySelector('[data-name="alerts"]');
+      var btns = Array.from(document.querySelectorAll('button'));
+      var btn = btns.find(b => b.textContent.trim() === 'Alert')
+        || document.querySelector('[aria-label="Create Alert"]');
       if (btn) { btn.click(); return true; }
       return false;
     })()
@@ -19,26 +21,27 @@ export async function create({ condition, price, message }) {
     await client.Input.dispatchKeyEvent({ type: 'keyUp', key: 'a', code: 'KeyA' });
   }
 
-  await new Promise(r => setTimeout(r, 1000));
+  await new Promise(r => setTimeout(r, 1200));
 
+  // Find the price input — it's the one already pre-filled with a number
+  // Use _valueTracker trick to properly update React controlled inputs
   const priceSet = await evaluate(`
     (function() {
-      var inputs = document.querySelectorAll('[class*="alert"] input[type="text"], [class*="alert"] input[type="number"]');
-      for (var i = 0; i < inputs.length; i++) {
-        var label = inputs[i].closest('[class*="row"]')?.querySelector('[class*="label"]');
-        if (label && /value|price/i.test(label.textContent)) {
-          var nativeSet = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
-          nativeSet.call(inputs[i], ${safeString(String(price))});
-          inputs[i].dispatchEvent(new Event('input', { bubbles: true }));
-          inputs[i].dispatchEvent(new Event('change', { bubbles: true }));
-          return true;
-        }
-      }
-      if (inputs.length > 0) {
+      function setReactInputValue(el, val) {
         var nativeSet = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
-        nativeSet.call(inputs[0], ${safeString(String(price))});
-        inputs[0].dispatchEvent(new Event('input', { bubbles: true }));
-        return true;
+        nativeSet.call(el, val);
+        // Reset React's value tracker so it detects the change
+        var tracker = el._valueTracker;
+        if (tracker) tracker.setValue('');
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      var inputs = Array.from(document.querySelectorAll('input[type="text"], input[type="number"]'));
+      // Price input is the one with a numeric value already set
+      var priceInput = inputs.find(function(el) { return /^[\d,\.]+$/.test(el.value.trim()); });
+      if (priceInput) {
+        setReactInputValue(priceInput, ${safeString(String(price))});
+        return priceInput.value;
       }
       return false;
     })()
@@ -103,21 +106,58 @@ export async function list() {
   return { success: true, alert_count: result?.alerts?.length || 0, source: 'internal_api', alerts: result?.alerts || [], error: result?.error };
 }
 
-export async function deleteAlerts({ delete_all }) {
-  if (delete_all) {
-    const result = await evaluate(`
-      (function() {
-        var alertBtn = document.querySelector('[data-name="alerts"]');
-        if (alertBtn) alertBtn.click();
-        var header = document.querySelector('[data-name="alerts"]');
-        if (header) {
-          header.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 100, clientY: 100 }));
-          return { context_menu_opened: true };
+export async function deleteAlerts({ delete_all, alert_ids }) {
+  // Delete specific alerts by ID via REST API
+  if (alert_ids && alert_ids.length > 0) {
+    const results = await evaluateAsync(`
+      (async function() {
+        const ids = ${JSON.stringify(alert_ids)};
+        const out = [];
+        for (const id of ids) {
+          const r = await fetch('https://pricealerts.tradingview.com/delete_alert', {
+            method: 'POST', credentials: 'include',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded',
+                       'X-CSRFToken': document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '' },
+            body: 'alert_id=' + id
+          });
+          const d = await r.json();
+          out.push({ id, status: d.s });
         }
-        return { context_menu_opened: false };
+        return out;
       })()
     `);
-    return { success: true, note: 'Alert deletion requires manual confirmation in the context menu.', context_menu_opened: result?.context_menu_opened || false, source: 'dom_fallback' };
+    return { success: true, results, source: 'rest_api' };
   }
-  throw new Error('Individual alert deletion not yet supported. Use delete_all: true.');
+
+  if (delete_all) {
+    // Get all alert IDs then delete them
+    const listResult = await evaluateAsync(`
+      fetch('https://pricealerts.tradingview.com/list_alerts', { credentials: 'include' })
+        .then(r => r.json())
+        .then(d => (d.r || []).map(a => a.alert_id))
+    `);
+    const ids = Array.isArray(listResult) ? listResult : [];
+    if (ids.length === 0) return { success: true, deleted: 0, source: 'rest_api' };
+
+    const delResults = await evaluateAsync(`
+      (async function() {
+        const ids = ${JSON.stringify(ids)};
+        const out = [];
+        for (const id of ids) {
+          const r = await fetch('https://pricealerts.tradingview.com/delete_alert', {
+            method: 'POST', credentials: 'include',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded',
+                       'X-CSRFToken': document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '' },
+            body: 'alert_id=' + id
+          });
+          const d = await r.json();
+          out.push({ id, status: d.s });
+        }
+        return out;
+      })()
+    `);
+    const deleted = Array.isArray(delResults) ? delResults.filter(r => r.status === 'ok').length : 0;
+    return { success: true, deleted, results: delResults, source: 'rest_api' };
+  }
+  throw new Error('Provide alert_ids array or delete_all: true.');
 }

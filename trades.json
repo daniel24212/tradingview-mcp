@@ -1,0 +1,77 @@
+[
+  {
+    "id": "TRD-1777844458361",
+    "timestamp": "2026-05-03T21:40:58.361Z",
+    "symbol": "BTCUSDT",
+    "direction": "buy",
+    "timeframes": [
+      "1D",
+      "4H",
+      "1H",
+      "15M"
+    ],
+    "entry": 78900,
+    "sl": 63932,
+    "tp1": 123804,
+    "tp2": 168708,
+    "rr_tp1": 3,
+    "rr_tp2": 6,
+    "confluence": 8,
+    "bias": "STRONG BUY — 4/4 MTF bullish alignment, above EMA50 on all timeframes, buying dominance on 4H/1H/15M",
+    "sentiment": "Neutral 47/100",
+    "status": "pending",
+    "outcome": null,
+    "pnl_r": null,
+    "notes": "SL zone: $65,000–$70,351 demand (strength 7.91, fresh). 1H resistance at $78,686 — wait for clean close above. 4H trendline resistance at $79,413. Weekend session — crypto allowed per rules."
+  },
+  {
+    "id": "TRD-1777845709929",
+    "timestamp": "2026-05-03T22:01:49.929Z",
+    "symbol": "BTCUSDT",
+    "direction": "buy",
+    "timeframes": [
+      "1D",
+      "4H",
+      "1H",
+      "15M"
+    ],
+    "entry": 78700,
+    "sl": 63932.08,
+    "tp1": 123004,
+    "tp2": 167308,
+    "rr_tp1": 3,
+    "rr_tp2": 6,
+    "confluence": 9,
+    "bias": "STRONG BUY — all 4 timeframes bullish, price above EMA50 on 1D/4H/1H/15M, trendline support on 15M, demand zone fresh and untouched",
+    "sentiment": "Neutral 47/100",
+    "status": "pending",
+    "outcome": null,
+    "pnl_r": null,
+    "notes": "Weekend crypto session. SL placed 1.64% below daily demand zone ($65,000–$70,351). Resistance at $80,842 (1D trendline). MACD histogram slightly negative on 1D — wait for candle close confirmation before entry."
+  },
+  {
+    "id": "TRD-1777848134850",
+    "timestamp": "2026-05-03T22:42:14.850Z",
+    "symbol": "BABYUSDT",
+    "direction": "sell",
+    "timeframes": [
+      "1D",
+      "4H",
+      "1H",
+      "15M"
+    ],
+    "entry": 0.01964,
+    "sl": 0.02374,
+    "tp1": 0.00735,
+    "tp2": null,
+    "rr_tp1": 3,
+    "rr_tp2": null,
+    "confluence": 5,
+    "bias": "1H+15M bearish breakdown below EMA50/200, RSI 1D overbought at 73.57, selling volume dominance on daily",
+    "sentiment": "Neutral 47/100",
+    "status": "pending",
+    "outcome": null,
+    "pnl_r": null,
+    "notes": "No supply zone above price — SL is fallback 2x ATR. TP2 mathematically impossible (would be negative). 4H still bullish — partial confluence only. Weekend caution applied."
+  }
+]
