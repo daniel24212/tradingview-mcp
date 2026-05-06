@@ -111,6 +111,28 @@ export function suggestSL(bars, direction) {
   const { demandZones, supplyZones, atr, current_price } = detectZones(bars);
   const dir = direction.toLowerCase();
 
+  /**
+   * Zone quality by touch count:
+   *   0-1 touches = STRONG     (fresh, reliable SL)
+   *   2   touches = WEAKENED   (use with warning)
+   *   3+  touches = COMPROMISED (reject — use ATR fallback)
+   */
+  function pickBestZone(zones) {
+    const fresh = zones.filter(z => z.returns_to_zone <= 1);
+    if (fresh.length) return { zone: fresh[0], quality: 'strong', warning: null };
+    const warn = zones.filter(z => z.returns_to_zone === 2);
+    if (warn.length) return {
+      zone: warn[0], quality: 'weakened',
+      warning: `Zone tested ${warn[0].returns_to_zone}x — weakened, elevated risk of break`,
+    };
+    const any = zones[0];
+    if (any) return {
+      zone: any, quality: 'compromised',
+      warning: `Zone tested ${any.returns_to_zone}x — HIGH RISK of break`,
+    };
+    return null;
+  }
+
   if (dir === 'buy' || dir === 'long') {
     const valid = demandZones.filter(z => z.zone_low < current_price && z.valid);
     if (!valid.length) {
@@ -121,13 +143,25 @@ export function suggestSL(bars, direction) {
         fallback_note: 'Using 2x ATR below price as fallback',
       };
     }
-    const best   = valid[0];
+    const picked = pickBestZone(valid);
+    if (picked.quality === 'compromised') {
+      return {
+        success: false, direction: 'buy',
+        reason: `Best demand zone tested ${picked.zone.returns_to_zone}x — too weak for reliable SL`,
+        fallback_sl: atr ? parseFloat((current_price - atr * 2).toFixed(8)) : null,
+        fallback_note: 'Zone over-tested. Using 2x ATR below price as safer SL',
+        rejected_zone: picked.zone,
+      };
+    }
+    const best   = picked.zone;
     const buffer = Math.max(best.zone_height * 0.15, atr ? atr * 0.5 : 0);
     const sl     = parseFloat((best.zone_low - buffer).toFixed(8));
     return {
       success: true, direction: 'buy', suggested_sl: sl, zone: best,
+      zone_quality: picked.quality,
+      warning: picked.warning,
       buffer: parseFloat(buffer.toFixed(8)),
-      reasoning: `SL placed ${((buffer / best.zone_low) * 100).toFixed(2)}% below demand zone low (${best.zone_low}). Strength: ${best.strength}, Freshness: ${best.freshness}, Zone touched ${best.returns_to_zone}x since formation.`,
+      reasoning: `SL placed ${((buffer / best.zone_low) * 100).toFixed(2)}% below demand zone low (${best.zone_low}). Touches: ${best.returns_to_zone}, Quality: ${picked.quality}, Strength: ${best.strength}.${picked.warning ? ' WARN: ' + picked.warning : ''}`,
     };
   }
 
@@ -141,13 +175,25 @@ export function suggestSL(bars, direction) {
         fallback_note: 'Using 2x ATR above price as fallback',
       };
     }
-    const best   = valid[0];
+    const picked = pickBestZone(valid);
+    if (picked.quality === 'compromised') {
+      return {
+        success: false, direction: 'sell',
+        reason: `Best supply zone tested ${picked.zone.returns_to_zone}x — too weak for reliable SL`,
+        fallback_sl: atr ? parseFloat((current_price + atr * 2).toFixed(8)) : null,
+        fallback_note: 'Zone over-tested. Using 2x ATR above price as safer SL',
+        rejected_zone: picked.zone,
+      };
+    }
+    const best   = picked.zone;
     const buffer = Math.max(best.zone_height * 0.15, atr ? atr * 0.5 : 0);
     const sl     = parseFloat((best.zone_high + buffer).toFixed(8));
     return {
       success: true, direction: 'sell', suggested_sl: sl, zone: best,
+      zone_quality: picked.quality,
+      warning: picked.warning,
       buffer: parseFloat(buffer.toFixed(8)),
-      reasoning: `SL placed ${((buffer / best.zone_high) * 100).toFixed(2)}% above supply zone high (${best.zone_high}). Strength: ${best.strength}, Freshness: ${best.freshness}, Zone touched ${best.returns_to_zone}x since formation.`,
+      reasoning: `SL placed ${((buffer / best.zone_high) * 100).toFixed(2)}% above supply zone high (${best.zone_high}). Touches: ${best.returns_to_zone}, Quality: ${picked.quality}, Strength: ${best.strength}.${picked.warning ? ' WARN: ' + picked.warning : ''}`,
     };
   }
 
