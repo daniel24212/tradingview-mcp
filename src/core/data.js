@@ -250,38 +250,55 @@ export async function getEquity() {
 }
 
 export async function getQuote({ symbol } = {}) {
-  const data = await evaluate(`
-    (function() {
-      var api = ${CHART_API};
-      var sym = ${safeString(symbol || '')};
-      if (!sym) { try { sym = api.symbol(); } catch(e) {} }
-      if (!sym) { try { sym = api.symbolExt().symbol; } catch(e) {} }
-      var ext = {};
-      try { ext = api.symbolExt() || {}; } catch(e) {}
-      var bars = ${BARS_PATH};
-      var quote = { symbol: sym };
-      if (bars && typeof bars.lastIndex === 'function') {
-        var last = bars.valueAt(bars.lastIndex());
-        if (last) { quote.time = last[0]; quote.open = last[1]; quote.high = last[2]; quote.low = last[3]; quote.close = last[4]; quote.last = last[4]; quote.volume = last[5] || 0; }
-      }
-      try {
-        var bidEl = document.querySelector('[class*="bid"] [class*="price"], [class*="dom-"] [class*="bid"]');
-        var askEl = document.querySelector('[class*="ask"] [class*="price"], [class*="dom-"] [class*="ask"]');
-        if (bidEl) quote.bid = parseFloat(bidEl.textContent.replace(/[^0-9.\\-]/g, ''));
-        if (askEl) quote.ask = parseFloat(askEl.textContent.replace(/[^0-9.\\-]/g, ''));
-      } catch(e) {}
-      try {
-        var hdr = document.querySelector('[class*="headerRow"] [class*="last-"]');
-        if (hdr) { var hdrPrice = parseFloat(hdr.textContent.replace(/[^0-9.\\-]/g, '')); if (!isNaN(hdrPrice)) quote.header_price = hdrPrice; }
-      } catch(e) {}
-      if (ext.description) quote.description = ext.description;
-      if (ext.exchange) quote.exchange = ext.exchange;
-      if (ext.type) quote.type = ext.type;
-      return quote;
-    })()
-  `);
-  if (!data || (!data.last && !data.close)) throw new Error('Could not retrieve quote. The chart may still be loading.');
-  return { success: true, ...data };
+  const MAX_RETRIES = 5;
+  const RETRY_DELAY = 600;
+  const reqBase = symbol ? symbol.toUpperCase().replace(/^[^:]+:/, '') : null;
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    if (attempt > 0) await new Promise(r => setTimeout(r, RETRY_DELAY));
+
+    const data = await evaluate(`
+      (function() {
+        var api = ${CHART_API};
+        var sym = '';
+        try { sym = api.symbol() || ''; } catch(e) {}
+        var ext = {};
+        try { ext = api.symbolExt() || {}; } catch(e) {}
+        var bars = ${BARS_PATH};
+        var quote = { symbol: sym };
+        if (bars && typeof bars.lastIndex === 'function') {
+          var last = bars.valueAt(bars.lastIndex());
+          if (last) { quote.time = last[0]; quote.open = last[1]; quote.high = last[2]; quote.low = last[3]; quote.close = last[4]; quote.last = last[4]; quote.volume = last[5] || 0; }
+        }
+        try {
+          var bidEl = document.querySelector('[class*="bid"] [class*="price"], [class*="dom-"] [class*="bid"]');
+          var askEl = document.querySelector('[class*="ask"] [class*="price"], [class*="dom-"] [class*="ask"]');
+          if (bidEl) quote.bid = parseFloat(bidEl.textContent.replace(/[^0-9.\\-]/g, ''));
+          if (askEl) quote.ask = parseFloat(askEl.textContent.replace(/[^0-9.\\-]/g, ''));
+        } catch(e) {}
+        try {
+          var hdr = document.querySelector('[class*="headerRow"] [class*="last-"]');
+          if (hdr) { var hdrPrice = parseFloat(hdr.textContent.replace(/[^0-9.\\-]/g, '')); if (!isNaN(hdrPrice)) quote.header_price = hdrPrice; }
+        } catch(e) {}
+        if (ext.description) quote.description = ext.description;
+        if (ext.exchange) quote.exchange = ext.exchange;
+        if (ext.type) quote.type = ext.type;
+        return quote;
+      })()
+    `);
+
+    if (!data || (!data.last && !data.close)) continue;
+
+    // Verify the chart has loaded the requested symbol before accepting the data
+    if (reqBase) {
+      const gotBase = (data.symbol || '').toUpperCase().replace(/^[^:]+:/, '');
+      if (gotBase && gotBase !== reqBase && !gotBase.includes(reqBase) && !reqBase.includes(gotBase)) continue;
+    }
+
+    return { success: true, ...data };
+  }
+
+  throw new Error('Could not retrieve quote. The chart may still be loading.');
 }
 
 export async function getDepth() {
