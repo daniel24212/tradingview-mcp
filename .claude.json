@@ -2,14 +2,19 @@
   "mcpServers": {
     "tradingview": {
       "command": "node",
-      "args": ["/home/cts/tradingview-mcp/index.js"],
+      "args": [
+        "/home/cts/tradingview-mcp/index.js"
+      ],
       "env": {
-        "CDP_URL": "http://172.31.0.1:9222"
+        "CDP_URL": "http://127.0.0.1:9222"
       }
     },
     "memory": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-memory"]
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-memory"
+      ]
     }
   }
 }
