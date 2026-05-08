@@ -123,6 +123,40 @@ PROMPT
       fi
 
       ~/oscar_notify.sh "$REPLY"
+
+      # ── Auto-recheck if WAIT signal ──────────────────────────────────────
+      if echo "$REPLY" | grep -qiE "signal.*WAIT|NO TRADE|confluence.*0|WAIT.*No valid"; then
+        RECHECK_SYMBOL="$SYMBOL"
+        RECHECK_IS_DAYTRADE="$IS_DAYTRADE"
+        (
+          MAX_RETRIES=3
+          RETRY=0
+          while [ $RETRY -lt $MAX_RETRIES ]; do
+            RETRY=$((RETRY + 1))
+            WAIT_MINS=30
+            ~/oscar_notify.sh "⏰ WAIT signal detected. Oscar will recheck $RECHECK_SYMBOL in ${WAIT_MINS} mins (attempt $RETRY/$MAX_RETRIES)..."
+            sleep $((WAIT_MINS * 60))
+            ~/oscar_notify.sh "🔄 Rechecking $RECHECK_SYMBOL now..."
+            RECHK_FILE=$(mktemp /tmp/oscar_rechk_XXXXXX.txt)
+            cat > "$RECHK_FILE" << RPROMPT
+You are Oscar. Recheck $RECHECK_SYMBOL for a trade signal. Use the same MTF workflow. If signal is still WAIT say "STILL WAIT". If BUY or SELL found, give the full signal with entry, TP1, TP2, SL.
+RPROMPT
+            RECHK_REPLY=$(cd ~/tradingview-mcp && timeout 720 $CLAUDE -p "$(cat $RECHK_FILE)" --allowedTools "chart_set_symbol,quote_get,rules_no_trade_check,rules_mtf_analysis,rules_suggest_sl,rules_check_trade,trade_log,data_get_ohlcv,chart_set_timeframe" 2>/dev/null)
+            rm -f "$RECHK_FILE"
+            if [ -z "$RECHK_REPLY" ]; then
+              RECHK_REPLY="❌ Recheck timed out."
+            fi
+            ~/oscar_notify.sh "$RECHK_REPLY"
+            # Stop retrying if signal found
+            if echo "$RECHK_REPLY" | grep -qiE "signal.*BUY|signal.*SELL|STRONG BUY|STRONG SELL"; then
+              break
+            fi
+          done
+          if [ $RETRY -eq $MAX_RETRIES ]; then
+            ~/oscar_notify.sh "⏹️ $RECHECK_SYMBOL still no trade after $MAX_RETRIES rechecks. Monitoring stopped."
+          fi
+        ) &
+      fi
     fi
   done <<< "$MESSAGES"
   sleep 2
