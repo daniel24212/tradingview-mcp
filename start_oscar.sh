@@ -1,5 +1,10 @@
 #!/bin/bash
-echo "=== Oscar Startup $(date) ==="
+echo "# Fix DNS first
+sudo chattr -i /etc/resolv.conf 2>/dev/null
+echo "nameserver 8.8.8.8" | sudo tee /etc/resolv.conf > /dev/null
+sudo chattr +i /etc/resolv.conf 2>/dev/null
+
+=== Oscar Startup $(date) ==="
 
 # Kill any existing instances
 pkill -f "oscar_listen.sh" 2>/dev/null
@@ -70,7 +75,7 @@ fi
 
 # ── 6. Start Oscar listener ───────────────────────────────────────────────────
 echo "🚀 Starting Oscar listener..."
-~/oscar_listen.sh &
+~/oscar_listen.sh >> ~/oscar.log 2>&1 &
 sleep 1
 PID=$(pgrep -f "oscar_listen.sh" | head -1)
 echo "✅ Oscar listening (PID $PID)"
