@@ -11,7 +11,10 @@ export function registerChartTools(server) {
   server.tool('chart_set_symbol', 'Change the chart symbol', {
     symbol: z.string().describe('Symbol to set (e.g., BTCUSD, AAPL, ES1!, NYMEX:CL1!)'),
   }, async ({ symbol }) => {
-    try { return jsonResult(await core.setSymbol({ symbol })); }
+    try {
+      const sym = symbol.includes(':') ? symbol : 'BYBIT:' + symbol;
+      return jsonResult(await core.setSymbol({ symbol: sym }));
+    }
     catch (err) { return jsonResult({ success: false, error: err.message }, true); }
   });
 
