@@ -298,5 +298,30 @@
     "outcome": null,
     "pnl_r": null,
     "notes": "WAIT — confluence 5/10 below 7/10 minimum. Setup valid structurally but 1H bearish + 15M neutral. Re-check when 1H flips bullish and 15M bounces off $80,491 support trendline."
+  },
+  {
+    "id": "TRD-1778929980299",
+    "timestamp": "2026-05-16T11:13:00.299Z",
+    "symbol": "BTCUSDT",
+    "direction": "sell",
+    "timeframes": [
+      "4H",
+      "1H",
+      "15M",
+      "5M"
+    ],
+    "entry": 78500,
+    "sl": 79300,
+    "tp1": 76959,
+    "tp2": 76050,
+    "rr_tp1": 1.93,
+    "rr_tp2": 3.06,
+    "confluence": 7,
+    "bias": "Day trade short — 1H+15M bearish, below EMA50/200, bearish trendline, continuation sell into demand zone",
+    "sentiment": "",
+    "status": "pending",
+    "outcome": null,
+    "pnl_r": null,
+    "notes": "1H RSI at 26.66 — deeply oversold, wait for bounce to 78500 resistance zone and rejection candle close before entry. 4H and 5M data unavailable at analysis time."
   }
 ]

@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "trading-signals": {
+      "source": "ScientiaCapital/skills",
+      "sourceType": "github",
+      "skillPath": "active/trading-signals-skill/SKILL.md",
+      "computedHash": "5c163afd78b5863a1a6e63e29d0cde10f6e9e4156601947e6b478d35bd10966d"
+    }
+  }
+}
