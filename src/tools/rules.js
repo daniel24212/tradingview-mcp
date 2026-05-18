@@ -7,10 +7,10 @@ import { analyzeTrendlines } from '../core/trendlines.js';
 import { getOhlcv } from '../core/data.js';
 import { setSymbol, setTimeframe } from '../core/chart.js';
 const TF_MAP = { '1D':'1D','4H':'240','1H':'60','15M':'15','15':'15','240':'240','60':'60' };
-async function analyzeOneTimeframe(tf, barCount) {
+async function analyzeOneTimeframe(tf, barCount, symbol) {
   await setTimeframe({ timeframe: TF_MAP[tf] || tf });
   await new Promise(r => setTimeout(r, 2000));
-  const ohlcv = await getOhlcv({ count: barCount, summary: false });
+  const ohlcv = await getOhlcv({ count: barCount, summary: false, symbol });
   if (!ohlcv?.bars?.length) return { timeframe: tf, error: 'No data', signal: 'unavailable' };
   const bias = analyzeBias(ohlcv.bars);
   const tl = analyzeTrendlines(ohlcv.bars);
@@ -62,7 +62,7 @@ export function registerRulesTools(server) {
   }, async ({ symbol, bar_count = 300 }) => {
     try {
       if (symbol) { await setSymbol({ symbol: resolveSymbol(symbol) }); await new Promise(r => setTimeout(r, 1500)); }
-      const ohlcv = await getOhlcv({ count: Math.min(bar_count, 500), summary: false });
+      const ohlcv = await getOhlcv({ count: Math.min(bar_count, 500), summary: false, symbol: symbol ? resolveSymbol(symbol) : undefined });
       if (!ohlcv?.bars?.length) throw new Error('No OHLCV data. Is TradingView loaded?');
       const bias = analyzeBias(ohlcv.bars);
       const tl = analyzeTrendlines(ohlcv.bars);
@@ -77,10 +77,11 @@ export function registerRulesTools(server) {
     try {
       const noTrade = isNoTradeWindow(symbol || null);
       if (noTrade.blocked) return jsonResult({ success: true, verdict: '⛔ ANALYSIS BLOCKED', reason: noTrade.message });
-      if (symbol) { await setSymbol({ symbol: resolveSymbol(symbol) }); await new Promise(r => setTimeout(r, 1500)); }
+      const resolvedSym = symbol ? resolveSymbol(symbol) : undefined;
+      if (resolvedSym) { await setSymbol({ symbol: resolvedSym }); await new Promise(r => setTimeout(r, 1500)); }
       const results = [];
       for (const tf of timeframes) {
-        try { results.push(await analyzeOneTimeframe(tf, Math.min(bar_count, 500))); }
+        try { results.push(await analyzeOneTimeframe(tf, Math.min(bar_count, 500), resolvedSym)); }
         catch (e) { results.push({ timeframe: tf, error: e.message, signal: 'unavailable' }); }
       }
       try { await setTimeframe({ timeframe: '1D' }); } catch (_) {}
@@ -106,7 +107,7 @@ export function registerRulesTools(server) {
       const rr = validateRR(entry, stop, target);
       let biasResult = null, tlResult = null, chartSymbol = symbol || null;
       try {
-        const ohlcv = await getOhlcv({ count: 300, summary: false });
+        const ohlcv = await getOhlcv({ count: 300, summary: false, symbol: symbol ? resolveSymbol(symbol) : undefined });
         if (ohlcv?.bars?.length) { biasResult = analyzeBias(ohlcv.bars); tlResult = analyzeTrendlines(ohlcv.bars); if (!chartSymbol) chartSymbol = ohlcv.symbol; }
       } catch (e) { biasResult = { bias: 'error', reason: e.message }; }
       const watchlisted = chartSymbol ? isWatchlisted(chartSymbol) : null;
@@ -131,7 +132,7 @@ export function registerZoneTools(server) {
   }, async ({ symbol, bar_count = 300 }) => {
     try {
       if (symbol) { await setSymbol({ symbol: resolveSymbol(symbol) }); await new Promise(r => setTimeout(r, 1500)); }
-      const ohlcv = await getOhlcv({ count: Math.min(bar_count, 500), summary: false });
+      const ohlcv = await getOhlcv({ count: Math.min(bar_count, 500), summary: false, symbol: symbol ? resolveSymbol(symbol) : undefined });
       if (!ohlcv?.bars?.length) throw new Error('No OHLCV data. Is TradingView loaded?');
       const zones = detectZones(ohlcv.bars);
       return jsonResult({ success: true, symbol: ohlcv.symbol || symbol || 'unknown', timeframe: ohlcv.timeframe || 'unknown', current_price: zones.current_price, atr: zones.atr, demand_zones: zones.demandZones, supply_zones: zones.supplyZones, demand_count: zones.demandZones.length, supply_count: zones.supplyZones.length });
@@ -145,7 +146,7 @@ export function registerZoneTools(server) {
   }, async ({ direction, symbol, bar_count = 300 }) => {
     try {
       if (symbol) { await setSymbol({ symbol: resolveSymbol(symbol) }); await new Promise(r => setTimeout(r, 1500)); }
-      const ohlcv = await getOhlcv({ count: Math.min(bar_count, 500), summary: false });
+      const ohlcv = await getOhlcv({ count: Math.min(bar_count, 500), summary: false, symbol: symbol ? resolveSymbol(symbol) : undefined });
       if (!ohlcv?.bars?.length) throw new Error('No OHLCV data. Is TradingView loaded?');
       const result = suggestSL(ohlcv.bars, direction);
       return jsonResult({ success: true, symbol: ohlcv.symbol || symbol || 'unknown', timeframe: ohlcv.timeframe || 'unknown', ...result });
@@ -155,7 +156,7 @@ export function registerZoneTools(server) {
 
 async function analyzeReversalMode(symbol, barCount, forceDirection = null) {
   // Get zones and current price from daily chart
-  const ohlcvD = await getOhlcv({ count: barCount, summary: false });
+  const ohlcvD = await getOhlcv({ count: barCount, summary: false, symbol: symbol || undefined });
   if (!ohlcvD?.bars?.length) throw new Error('No OHLCV data');
   const { detectZones } = await import('../core/zones.js');
   const zones = detectZones(ohlcvD.bars);
@@ -176,7 +177,7 @@ async function analyzeReversalMode(symbol, barCount, forceDirection = null) {
   const confirmTFs = ['1H', '15M'];
   const confirmResults = [];
   for (const tf of confirmTFs) {
-    try { confirmResults.push(await analyzeOneTimeframe(tf, barCount)); } catch(e) { confirmResults.push({ timeframe: tf, signal: 'unavailable', error: e.message }); }
+    try { confirmResults.push(await analyzeOneTimeframe(tf, barCount, symbol || undefined)); } catch(e) { confirmResults.push({ timeframe: tf, signal: 'unavailable', error: e.message }); }
   }
 
   // Reversal confirmed if at least 1 of 2 lower TFs shows bullish (for buy) or bearish (for sell)
@@ -188,7 +189,7 @@ async function analyzeReversalMode(symbol, barCount, forceDirection = null) {
   try {
     await setTimeframe({ timeframe: '1D' });
     await new Promise(r => setTimeout(r, 2000));
-    const ohlcv1D = await getOhlcv({ count: barCount, summary: false });
+    const ohlcv1D = await getOhlcv({ count: barCount, summary: false, symbol: symbol || undefined });
     if (ohlcv1D?.bars?.length) {
       const { analyzeBias } = await import('../core/bias.js');
       htfBias = analyzeBias(ohlcv1D.bars).bias;

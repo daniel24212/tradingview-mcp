@@ -59,58 +59,73 @@ function buildGraphicsJS(collectionName, mapKey, filter) {
   `;
 }
 
-export async function getOhlcv({ count, summary } = {}) {
+export async function getOhlcv({ count, summary, symbol } = {}) {
+  const MAX_RETRIES = 5;
+  const RETRY_DELAY = 2000;
   const limit = Math.min(count || 100, MAX_OHLCV_BARS);
-  let data;
-  try {
-    data = await evaluate(`
-      (function() {
-        var bars = ${BARS_PATH};
-        if (!bars || typeof bars.lastIndex !== 'function') return null;
-        // Extract symbol
-        var sym = '';
-        try { sym = window.TradingViewApi._activeChartWidgetWV.value()._chartWidget.model().mainSeries().symbol(); } catch(e) {}
-        // Extract timeframe/resolution
-        var tf = '';
-        try { tf = window.TradingViewApi._activeChartWidgetWV.value()._chartWidget.model().mainSeries().interval(); } catch(e) {}
-        if (!tf) { try { tf = window.TradingViewApi._activeChartWidgetWV.value()._chartWidget.getResolution(); } catch(e) {} }
-        var result = [];
-        var end = bars.lastIndex();
-        var start = Math.max(bars.firstIndex(), end - ${limit} + 1);
-        for (var i = start; i <= end; i++) {
-          var v = bars.valueAt(i);
-          if (v) result.push({time: v[0], open: v[1], high: v[2], low: v[3], close: v[4], volume: v[5] || 0});
-        }
-        return {bars: result, total_bars: bars.size(), source: 'direct_bars', symbol: sym, timeframe: tf};
-      })()
-    `);
-  } catch { data = null; }
+  const reqBase = symbol ? symbol.toUpperCase().replace(/^[^:]+:/, '') : null;
+  const attempts = reqBase ? MAX_RETRIES : 1;
 
-  if (!data || !data.bars || data.bars.length === 0) {
-    throw new Error('Could not extract OHLCV data. The chart may still be loading.');
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    if (attempt > 0) await new Promise(r => setTimeout(r, RETRY_DELAY));
+
+    let data;
+    try {
+      data = await evaluate(`
+        (function() {
+          var bars = ${BARS_PATH};
+          if (!bars || typeof bars.lastIndex !== 'function') return null;
+          // Extract symbol
+          var sym = '';
+          try { sym = window.TradingViewApi._activeChartWidgetWV.value()._chartWidget.model().mainSeries().symbol(); } catch(e) {}
+          // Extract timeframe/resolution
+          var tf = '';
+          try { tf = window.TradingViewApi._activeChartWidgetWV.value()._chartWidget.model().mainSeries().interval(); } catch(e) {}
+          if (!tf) { try { tf = window.TradingViewApi._activeChartWidgetWV.value()._chartWidget.getResolution(); } catch(e) {} }
+          var result = [];
+          var end = bars.lastIndex();
+          var start = Math.max(bars.firstIndex(), end - ${limit} + 1);
+          for (var i = start; i <= end; i++) {
+            var v = bars.valueAt(i);
+            if (v) result.push({time: v[0], open: v[1], high: v[2], low: v[3], close: v[4], volume: v[5] || 0});
+          }
+          return {bars: result, total_bars: bars.size(), source: 'direct_bars', symbol: sym, timeframe: tf};
+        })()
+      `);
+    } catch { data = null; }
+
+    if (!data || !data.bars || data.bars.length === 0) continue;
+
+    // Verify chart loaded the requested symbol before accepting the data
+    if (reqBase) {
+      const gotBase = (data.symbol || '').toUpperCase().replace(/^[^:]+:/, '');
+      if (gotBase && gotBase !== reqBase && !gotBase.includes(reqBase) && !reqBase.includes(gotBase)) continue;
+    }
+
+    if (summary) {
+      const bars = data.bars;
+      const highs = bars.map(b => b.high);
+      const lows = bars.map(b => b.low);
+      const volumes = bars.map(b => b.volume);
+      const first = bars[0];
+      const last = bars[bars.length - 1];
+      return {
+        success: true, bar_count: bars.length,
+        period: { from: first.time, to: last.time },
+        open: first.open, close: last.close,
+        high: Math.max(...highs), low: Math.min(...lows),
+        range: Math.round((Math.max(...highs) - Math.min(...lows)) * 100) / 100,
+        change: Math.round((last.close - first.open) * 100) / 100,
+        change_pct: Math.round(((last.close - first.open) / first.open) * 10000) / 100 + '%',
+        avg_volume: Math.round(volumes.reduce((a, b) => a + b, 0) / volumes.length),
+        last_5_bars: bars.slice(-5),
+      };
+    }
+
+    return { success: true, bar_count: data.bars.length, total_available: data.total_bars, source: data.source, symbol: data.symbol || null, timeframe: data.timeframe || null, bars: data.bars };
   }
 
-  if (summary) {
-    const bars = data.bars;
-    const highs = bars.map(b => b.high);
-    const lows = bars.map(b => b.low);
-    const volumes = bars.map(b => b.volume);
-    const first = bars[0];
-    const last = bars[bars.length - 1];
-    return {
-      success: true, bar_count: bars.length,
-      period: { from: first.time, to: last.time },
-      open: first.open, close: last.close,
-      high: Math.max(...highs), low: Math.min(...lows),
-      range: Math.round((Math.max(...highs) - Math.min(...lows)) * 100) / 100,
-      change: Math.round((last.close - first.open) * 100) / 100,
-      change_pct: Math.round(((last.close - first.open) / first.open) * 10000) / 100 + '%',
-      avg_volume: Math.round(volumes.reduce((a, b) => a + b, 0) / volumes.length),
-      last_5_bars: bars.slice(-5),
-    };
-  }
-
-  return { success: true, bar_count: data.bars.length, total_available: data.total_bars, source: data.source, symbol: data.symbol || null, timeframe: data.timeframe || null, bars: data.bars };
+  throw new Error('Could not extract OHLCV data. The chart may still be loading.');
 }
 
 export async function getIndicator({ entity_id }) {
