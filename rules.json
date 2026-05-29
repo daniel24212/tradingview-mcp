@@ -17,10 +17,10 @@
     ]
   },
   "timeframes_to_check": [
-    "1D",
     "4H",
     "1H",
-    "15M"
+    "15M",
+    "5M"
   ],
   "bias_criteria": {
     "bullish": "Price above 50D EMA, RSI on daily between 45 and 70, higher highs and higher lows on 4H",
