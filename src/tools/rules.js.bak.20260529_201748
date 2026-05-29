@@ -22,57 +22,13 @@ async function analyzeOneTimeframe(tf, barCount, symbol) {
 }
 function buildVerdict(results) {
   const scores = { bullish: 0, bearish: 0, neutral: 0 };
-  for (const r of results) {
-    if (r.signal === 'bullish') scores.bullish++;
-    else if (r.signal === 'bearish') scores.bearish++;
-    else scores.neutral++;
-  }
-  const total = results.length;
-  const bullPct = scores.bullish / total;
-  const bearPct = scores.bearish / total;
-  const direction = bullPct >= bearPct ? 'bullish' : 'bearish';
-  const alignedPct = Math.max(bullPct, bearPct);
-  let score = 0;
-  if (alignedPct >= 1.0)       score += 4;
-  else if (alignedPct >= 0.75) score += 3;
-  else if (alignedPct >= 0.5)  score += 1;
-  const rsiValues = results.filter(r => r.metrics?.rsi14 != null).map(r => r.metrics.rsi14);
-  const avgRsi = rsiValues.length ? rsiValues.reduce((a, b) => a + b, 0) / rsiValues.length : null;
-  if (avgRsi !== null) {
-    if (direction === 'bearish' && avgRsi >= 45 && avgRsi < 65) score += 2;
-    else if (direction === 'bullish' && avgRsi > 35 && avgRsi <= 55) score += 2;
-    else if (direction === 'bearish' && avgRsi >= 65) score += 1;
-    else if (direction === 'bullish' && avgRsi <= 35) score += 1;
-  }
-  const emaAligned = results.filter(r => {
-    if (r.metrics?.above_ema50 == null) return false;
-    return direction === 'bearish' ? r.metrics.above_ema50 === false : r.metrics.above_ema50 === true;
-  }).length;
-  if (emaAligned === total)            score += 2;
-  else if (emaAligned >= total * 0.75) score += 1;
-  const tlAligned = results.filter(r => r.trendline_signal === direction).length;
-  if (tlAligned >= total * 0.75) score += 2;
-  else if (tlAligned >= total * 0.5) score += 1;
-  score = Math.min(10, score);
-  const rsiBlocked = avgRsi !== null && (
-    (direction === 'bearish' && avgRsi < 35) ||
-    (direction === 'bullish' && avgRsi > 65)
-  );
-  const passes = score >= 8 && !rsiBlocked;
-  const allAligned = alignedPct >= 1.0;
-  const rsiNote = avgRsi != null ? ` RSI avg: ${avgRsi.toFixed(1)}.` : '';
-  if (passes && allAligned && direction === 'bullish')
-    return { signal: 'STRONG BUY', strength: 'high', confluence_score: `${score}/10`, numeric_score: score, breakdown: scores, avg_rsi: avgRsi?.toFixed(1) ?? null, rsi_blocked: false, advice: `All TFs bullish. Score ${score}/10.${rsiNote} Wait for 5M bullish candle close.` };
-  if (passes && allAligned && direction === 'bearish')
-    return { signal: 'STRONG SELL', strength: 'high', confluence_score: `${score}/10`, numeric_score: score, breakdown: scores, avg_rsi: avgRsi?.toFixed(1) ?? null, rsi_blocked: false, advice: `All TFs bearish. Score ${score}/10.${rsiNote} Wait for 5M bearish candle close.` };
-  if (passes && !allAligned && direction === 'bullish')
-    return { signal: 'BUY', strength: 'medium', confluence_score: `${score}/10`, numeric_score: score, breakdown: scores, avg_rsi: avgRsi?.toFixed(1) ?? null, rsi_blocked: false, advice: `High confluence BUY (${score}/10).${rsiNote} Wait for 15M confirmation.` };
-  if (passes && !allAligned && direction === 'bearish')
-    return { signal: 'SELL', strength: 'medium', confluence_score: `${score}/10`, numeric_score: score, breakdown: scores, avg_rsi: avgRsi?.toFixed(1) ?? null, rsi_blocked: false, advice: `High confluence SELL (${score}/10).${rsiNote} Wait for 15M confirmation.` };
-  const reason = rsiBlocked
-    ? `RSI ${avgRsi?.toFixed(1)} extreme — ${direction === 'bearish' ? 'oversold: do not short' : 'overbought: do not buy'}`
-    : `Score ${score}/10 below minimum (8). ${alignedPct < 0.75 ? 'TFs not aligned.' : 'RSI/EMA/trendline weak.'}`;
-  return { signal: 'WAIT', strength: 'low', confluence_score: `${score}/10`, numeric_score: score, breakdown: scores, avg_rsi: avgRsi?.toFixed(1) ?? null, rsi_blocked: rsiBlocked, advice: `No trade. ${reason}` };
+  for (const r of results) { if (r.signal === 'bullish') scores.bullish++; else if (r.signal === 'bearish') scores.bearish++; else scores.neutral++; }
+  const total = results.length, bullPct = scores.bullish / total, bearPct = scores.bearish / total;
+  if (bullPct >= 0.75) return { signal: 'STRONG BUY', strength: 'high', confluence_score: `${scores.bullish}/${total}`, breakdown: scores, advice: 'All/most timeframes bullish with trendline support. Look for 15M entry confirmation.' };
+  if (bullPct >= 0.5)  return { signal: 'BUY',        strength: 'medium', confluence_score: `${scores.bullish}/${total}`, breakdown: scores, advice: 'Majority bullish. Wait for 15M bounce off support trendline.' };
+  if (bearPct >= 0.75) return { signal: 'STRONG SELL', strength: 'high', confluence_score: `${scores.bearish}/${total}`, breakdown: scores, advice: 'All/most timeframes bearish with trendline resistance. Look for 15M entry confirmation.' };
+  if (bearPct >= 0.5)  return { signal: 'SELL',        strength: 'medium', confluence_score: `${scores.bearish}/${total}`, breakdown: scores, advice: 'Majority bearish. Wait for 15M breakdown below support trendline.' };
+  return { signal: 'WAIT', strength: 'low', confluence_score: `0/${total}`, breakdown: scores, advice: 'Timeframes mixed. No clear confluence — stand aside until alignment improves.' };
 }
 // Ensure crypto symbols use BYBIT: prefix for real exchange data
 // Avoids TradingView defaulting to CFD/synthetic feeds (volume=0)
@@ -117,7 +73,7 @@ export function registerRulesTools(server) {
     symbol: z.string().optional().describe('Symbol e.g. ALICEUSDT.P'),
     timeframes: z.array(z.string()).optional().describe('Default: ["1D","4H","1H","15M"]'),
     bar_count: z.coerce.number().optional().describe('Bars per timeframe, default 300'),
-  }, async ({ symbol, timeframes = ['4H','1H','15M','5M'], bar_count = 300 }) => {
+  }, async ({ symbol, timeframes = ['1D','4H','1H','15M'], bar_count = 300 }) => {
     try {
       const noTrade = isNoTradeWindow(symbol || null);
       if (noTrade.blocked) return jsonResult({ success: true, verdict: '⛔ ANALYSIS BLOCKED', reason: noTrade.message });

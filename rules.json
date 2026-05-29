@@ -29,7 +29,7 @@
   },
   "risk_rules": {
     "max_risk_per_trade": "1% of portfolio",
-    "min_rr_ratio": 3,
+    "min_rr_ratio": 2.5,
     "no_trades_during": [
       "major US CPI",
       "FOMC",
