@@ -60,9 +60,19 @@ MARKET SENTIMENT: $SENTIMENT
 1. NEVER use training memory for prices, entries, SL, or TP. ALL prices must come from live tool calls.
 2. ALWAYS call chart_set_symbol first, then quote_get to confirm the live price.
 3. If the live price from quote_get differs from what you expect — use the LIVE price only.
-4. Minimum R:R is 1:3. Any TP1 below 1:3 is INVALID. Do not output it.
+4. Minimum R:R is 1:2.5. Any TP1 below 1:2.5 is INVALID. Do not output a trade signal.
 5. SL must come from rules_suggest_sl — never place SL manually.
 6. If rules_check_trade returns BLOCKED — do not generate a signal. Explain why.
+7. If SL risk > 0.4% of entry price — do not output a trade signal. Output WAIT with reason.
+8. CONFLUENCE GATE — this is absolute and cannot be overridden by any other analysis:
+   - After calling rules_mtf_analysis, check the response for gate_blocked field.
+   - If gate_blocked is true OR verdict is WAIT OR numeric_score < 8 → you MUST stop immediately.
+   - Output ONLY: "⏳ WAIT — Confluence [X]/10 below minimum (8/10). No trade."
+   - Do NOT print Entry, SL, TP, scorecard, options A/B, or ANY trade details.
+   - Do NOT suggest "50% size", "half size", or "wait for breakout entry".
+   - Do NOT do your own confluence calculation to override the tool result.
+   - The tool verdict is FINAL. Your own analysis does NOT override it.
+9. RSI GATE: If direction is SHORT and average RSI < 35 — output WAIT (market oversold). If direction is LONG and average RSI > 65 — output WAIT (market overbought).
 
 ## MANDATORY WORKFLOW — follow in exact order:
 
@@ -82,6 +92,11 @@ STEP 3 — Multi-timeframe analysis
 - This automatically cycles 1D → 4H → 1H → 15M
 - It checks RSI(14), EMA(50/200), MACD(12,26,9), Volume, trendlines on each timeframe
 - Wait for the result: STRONG BUY / BUY / WAIT / SELL / STRONG SELL
+- Read the numeric_score from the verdict (0-10)
+- HARD RULE: If numeric_score < 8 → output WAIT immediately, do NOT proceed to steps 4-8
+- HARD RULE: Never suggest "use 50% size" or "half size" for low confluence — either trade or WAIT
+- HARD RULE: If RSI < 35 on a SHORT signal → output WAIT (oversold, do not short)
+- HARD RULE: If RSI > 65 on a LONG signal → output WAIT (overbought, do not buy)
 
 STEP 3.5 — Advanced Market Context (trading-signals skill)
 Using the OHLCV data already loaded, perform these analyses and include results in your final output:
@@ -121,16 +136,19 @@ F) SENTIMENT — Using sentiment-signals reference:
 STEP 4 — If signal is BUY or STRONG BUY:
 - Call rules_suggest_sl with direction=buy to get zone-based SL
 - Entry = current price from quote_get or nearest demand zone high
-- TP1 = entry + (3 × risk), TP2 = entry + (6 × risk)
+- TP1 = entry + (2.5 × risk), TP2 = entry + (5 × risk)
+- HARD RULE: If TP1 R:R < 2.5 → do not output the trade, output WAIT instead
 
 STEP 5 — If signal is SELL or STRONG SELL:
 - Call rules_suggest_sl with direction=sell to get zone-based SL
 - Entry = current price from quote_get or nearest supply zone low
-- TP1 = entry - (3 × risk), TP2 = entry - (6 × risk)
+- TP1 = entry - (2.5 × risk), TP2 = entry - (5 × risk)
+- HARD RULE: If TP1 R:R < 2.5 → do not output the trade, output WAIT instead
 
 STEP 6 — Validate the trade
 - Call rules_check_trade with entry, stop (from rules_suggest_sl), target (TP1)
 - If BLOCKED — skip the trade and explain
+- HARD RULE: If SL risk > 0.4% of entry price → do not take the trade, output WAIT with reason
 - If CAUTION — include the warning in the signal
 
 STEP 7 — Output the signal
@@ -145,7 +163,8 @@ Signal: [BUY/SELL/WAIT]
 Entry: [price]
 TP1: [price] -- RR 1 to 3
 TP2: [price] -- RR 1 to 6
-(For day trades use: TP1 RR 1 to 1.5, TP2 RR 1 to 3)
+(For day trades use: TP1 RR 1 to 2.5, TP2 RR 1 to 5)
+⛔ GATE: Only output this signal block if Confluence >= 8/10 AND TP1 R:R >= 2.5. Otherwise output WAIT with reason only.
 SL: [price from rules_suggest_sl]
 Invalidation: [level]
 Zone: [demand/supply zone details]
@@ -154,7 +173,7 @@ STEP 8 — Log the trade
 - Call trade_log with all signal details
 PROMPT
 
-      REPLY=$(cd ~/tradingview-mcp && timeout 720 $CLAUDE -p "$(cat $PROMPT_FILE)" --allowedTools "chart_set_symbol,quote_get,rules_no_trade_check,rules_show,rules_mtf_analysis,rules_suggest_sl,rules_check_trade,rules_get_zones,rules_get_bias,trade_log,data_get_ohlcv,chart_set_timeframe" 2>/dev/null)
+      REPLY=$(cd ~/tradingview-mcp && timeout 720 $CLAUDE -p "$(cat $PROMPT_FILE)" --allowedTools "chart_set_symbol,quote_get,rules_no_trade_check,rules_show,rules_mtf_analysis,rules_suggest_sl,rules_check_trade,rules_get_zones,trade_log" 2>/dev/null)
       rm -f "$PROMPT_FILE"
 
       if [ -z "$REPLY" ]; then

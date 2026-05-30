@@ -139,18 +139,11 @@ export function registerRulesTools(server) {
         resistance_level: r.trendlines?.resistance?.level ?? '-', resistance_pos: r.trendlines?.resistance?.position ?? '-',
       }));
       // ── Hard gate: block signals below 8/10 ─────────────────────────────
-      if (verdict.numeric_score < 8) {
-        return jsonResult({
-          success: true,
-          gate_blocked: true,
-          verdict: 'WAIT',
-          confluence_score: `${verdict.numeric_score}/10`,
-          numeric_score: verdict.numeric_score,
-          avg_rsi: verdict.avg_rsi,
-          instruction: `⛔ HARD STOP. Score ${verdict.numeric_score}/10 is below minimum (8/10). You MUST output exactly: "⏳ WAIT — Confluence ${verdict.numeric_score}/10 below minimum (8/10). No trade." — nothing else. No entry. No SL. No TP. No scorecard. No options A/B.`,
-        });
-      }
-      return jsonResult({ success: true, symbol: symbol || 'current chart', verdict: verdict.signal, strength: verdict.strength, confluence_score: verdict.confluence_score, numeric_score: verdict.numeric_score, gate_blocked: false, advice: verdict.advice, no_trade_warning: noTrade.warnings?.length ? noTrade.warnings : null, timeframe_breakdown: summary, raw: results });
+      const finalVerdict = (verdict.numeric_score < 8)
+        ? { ...verdict, signal: 'WAIT', strength: 'low',
+            advice: `⛔ CONFLUENCE GATE BLOCKED — Score ${verdict.numeric_score}/10 is below minimum (8/10). No trade. Do NOT output entry, SL, TP1, TP2 or any trade details.` }
+        : verdict;
+      return jsonResult({ success: true, symbol: symbol || 'current chart', verdict: finalVerdict.signal, strength: finalVerdict.strength, confluence_score: finalVerdict.confluence_score, numeric_score: verdict.numeric_score, gate_blocked: verdict.numeric_score < 8, advice: finalVerdict.advice, no_trade_warning: noTrade.warnings?.length ? noTrade.warnings : null, timeframe_breakdown: summary, raw: results });
     } catch (err) { return jsonResult({ success: false, error: err.message }, true); }
   });
   server.tool('rules_check_trade', 'Full pre-trade check: no-trade window + R:R + bias + trendlines. Watchlist is informational only.', {
