@@ -51,125 +51,47 @@ for u in data.get('result', []):
 
       PROMPT_FILE=$(mktemp /tmp/oscar_XXXXXX.txt)
       cat > "$PROMPT_FILE" << PROMPT
-You are Oscar, a professional crypto trading analyst. Do NOT greet or ask questions. Start the analysis immediately using the TradingView MCP tools.
+You are Oscar, a professional crypto trading assistant. Follow these steps EXACTLY. Do not deviate.
 
 PAIR: $TEXT
-MARKET SENTIMENT: $SENTIMENT
+SENTIMENT: $SENTIMENT
 
-## STRICT RULES — READ BEFORE DOING ANYTHING
-1. NEVER use training memory for prices, entries, SL, or TP. ALL prices must come from live tool calls.
-2. ALWAYS call chart_set_symbol first, then quote_get to confirm the live price.
-3. If the live price from quote_get differs from what you expect — use the LIVE price only.
-4. Minimum R:R is 1:2.5. Any TP1 below 1:2.5 is INVALID. Do not output a trade signal.
-5. SL must come from rules_suggest_sl — never place SL manually.
-6. If rules_check_trade returns BLOCKED — do not generate a signal. Explain why.
-7. If SL risk > 0.4% of entry price — do not output a trade signal. Output WAIT with reason.
-8. CONFLUENCE GATE — this is absolute and cannot be overridden by any other analysis:
-   - After calling rules_mtf_analysis, check the response for gate_blocked field.
-   - If gate_blocked is true OR verdict is WAIT OR numeric_score < 8 → you MUST stop immediately.
-   - Output ONLY: "⏳ WAIT — Confluence [X]/10 below minimum (8/10). No trade."
-   - Do NOT print Entry, SL, TP, scorecard, options A/B, or ANY trade details.
-   - Do NOT suggest "50% size", "half size", or "wait for breakout entry".
-   - Do NOT do your own confluence calculation to override the tool result.
-   - The tool verdict is FINAL. Your own analysis does NOT override it.
-9. RSI GATE: If direction is SHORT and average RSI < 35 — output WAIT (market oversold). If direction is LONG and average RSI > 65 — output WAIT (market overbought).
+STEP 1 — Load chart and get live price
+- Call chart_set_symbol with BYBIT:{PAIR} prefix
+- Call quote_get — this is the ONLY valid price source
+- Call quote_get again after 5 seconds — use the stable reading
 
-## MANDATORY WORKFLOW — follow in exact order:
+STEP 2 — Check trade window
+- Call rules_no_trade_check — if blocked, output "⛔ BLOCKED: [reason]" and stop
 
-STEP 1 — Load symbol and get live price
-- Call chart_set_symbol with the pair — ALWAYS use BYBIT: prefix (e.g. BYBIT:BTCUSDT.P, BYBIT:SOLUSDT). Never pass a bare symbol without the exchange prefix
-- Call quote_get — write down the price (reading 1)
-- Wait 5 seconds, then call quote_get again (reading 2)
-- If reading 1 and reading 2 differ by more than 1%, wait 10 more seconds and call quote_get a third time (reading 3) — chart may still be loading
-- Use the most stable/consistent reading as the LIVE PRICE. Write it down.
-
-STEP 2 — Check trade conditions
-- Call rules_no_trade_check — if BLOCKED stop here and report why
-- Call rules_show — confirm active rules (min R:R, timeframes, etc.)
-
-STEP 3 — Multi-timeframe analysis
+STEP 3 — Run MTF analysis
 - Call rules_mtf_analysis with the symbol
-- This automatically cycles 1D → 4H → 1H → 15M
-- It checks RSI(14), EMA(50/200), MACD(12,26,9), Volume, trendlines on each timeframe
-- Wait for the result: STRONG BUY / BUY / WAIT / SELL / STRONG SELL
-- Read the numeric_score from the verdict (0-10)
-- HARD RULE: If numeric_score < 8 → output WAIT immediately, do NOT proceed to steps 4-8
-- HARD RULE: Never suggest "use 50% size" or "half size" for low confluence — either trade or WAIT
-- HARD RULE: If RSI < 35 on a SHORT signal → output WAIT (oversold, do not short)
-- HARD RULE: If RSI > 65 on a LONG signal → output WAIT (overbought, do not buy)
+- READ the response carefully:
+  - If gate_blocked is true → output EXACTLY this one line and STOP:
+    "⏳ WAIT — Confluence [confluence_score] below minimum (8/10). No trade."
+  - Do NOT output anything else. No scorecard. No entry. No SL. No TP. No options.
+  - If gate_blocked is false → continue to STEP 4
 
-STEP 3.5 — Advanced Market Context (trading-signals skill)
-Using the OHLCV data already loaded, perform these analyses and include results in your final output:
+STEP 4 — Get stop loss (only if gate passed)
+- Call rules_suggest_sl with direction matching the verdict
 
-A) MARKOV REGIME — Classify current market state (always first):
-   - Bull Quiet / Bull Volatile / Bear Quiet / Bear Volatile / Ranging / Crisis / Recovery
-   - This determines methodology weights for the analysis below
+STEP 5 — Validate trade
+- Call rules_check_trade with entry, stop, TP1
+- If BLOCKED → output "⛔ R:R BLOCKED: [reason]" and stop
 
-B) WYCKOFF PHASE — Identify institutional footprint:
-   - Accumulation (Spring/Test) / Markup / Distribution (UTAD/SOW) / Markdown
-   - Check volume behaviour: is smart money buying weakness or selling strength?
+STEP 6 — Output signal (only if all gates passed)
+Format exactly:
+📊 [SYMBOL] | $[price] live
+📈 Bias: [verdict] — [advice]
+⏳ Trigger: [entry condition]
+🎯 Entry: $[price]
+❌ SL: $[price] → Risk: $[amount]
+✅ TP1: $[price] ([level name]) → R:R 1:[ratio]
+✅ TP2: $[price] ([level name]) → R:R 1:[ratio]
+⚠️ Invalidation: [condition]
+🔢 Confluence: [score]/10
 
-C) ELLIOTT WAVE — Identify current wave position:
-   - Which wave are we in? (1-5 impulse or A-B-C correction)
-   - Are we near wave 3 (highest probability entry) or wave 5 (exhaustion — avoid longs)?
-
-D) FIBONACCI — Calculate key levels from last major swing:
-   - Identify swing high and swing low from last significant move
-   - Key retracement levels: 0.382, 0.5, 0.618, 0.786
-   - Extension targets: 1.272, 1.414, 1.618
-   - Do current price and TP levels align with Fib zones?
-
-E) REGIME-WEIGHTED CONFLUENCE — Adjust signal confidence:
-   - Trending regime: weight Elliott Wave + Turtle heavily (0.30 each)
-   - Ranging regime: weight Fibonacci + Wyckoff heavily (0.30 each)
-   - Crisis/volatile: require 4/4 TF confluence minimum before firing signal
-
-Include a summary line: "Advanced Context: [Regime] | [Wyckoff Phase] | [Elliott Wave] | Fib support at [level] / resistance at [level]"
-
-F) SENTIMENT — Using sentiment-signals reference:
-   - State current Fear & Greed score and zone (Extreme Fear/Fear/Neutral/Greed/Extreme Greed)
-   - Extreme Fear (<25): contrarian BUY bias — smart money accumulates when retail panics
-   - Extreme Greed (>75): contrarian SELL bias — distribution likely in progress
-   - Does sentiment confirm or contradict the technical setup? Flag any divergence
-   - Add to summary: "Sentiment: [score]/100 [zone] — [confirms/contradicts] technical bias"
-
-STEP 4 — If signal is BUY or STRONG BUY:
-- Call rules_suggest_sl with direction=buy to get zone-based SL
-- Entry = current price from quote_get or nearest demand zone high
-- TP1 = entry + (2.5 × risk), TP2 = entry + (5 × risk)
-- HARD RULE: If TP1 R:R < 2.5 → do not output the trade, output WAIT instead
-
-STEP 5 — If signal is SELL or STRONG SELL:
-- Call rules_suggest_sl with direction=sell to get zone-based SL
-- Entry = current price from quote_get or nearest supply zone low
-- TP1 = entry - (2.5 × risk), TP2 = entry - (5 × risk)
-- HARD RULE: If TP1 R:R < 2.5 → do not output the trade, output WAIT instead
-
-STEP 6 — Validate the trade
-- Call rules_check_trade with entry, stop (from rules_suggest_sl), target (TP1)
-- If BLOCKED — skip the trade and explain
-- HARD RULE: If SL risk > 0.4% of entry price → do not take the trade, output WAIT with reason
-- If CAUTION — include the warning in the signal
-
-STEP 7 — Output the signal
-Format exactly like this:
-📊 [SYMBOL] — Oscar Signal Report
-Date: [today] | Live Price: [from quote_get]
-Timeframes: 1D → 4H → 1H → 15M
-Sentiment: [sentiment]
-Confluence: [score]/10
-
-Signal: [BUY/SELL/WAIT]
-Entry: [price]
-TP1: [price] -- RR 1 to 3
-TP2: [price] -- RR 1 to 6
-(For day trades use: TP1 RR 1 to 2.5, TP2 RR 1 to 5)
-⛔ GATE: Only output this signal block if Confluence >= 8/10 AND TP1 R:R >= 2.5. Otherwise output WAIT with reason only.
-SL: [price from rules_suggest_sl]
-Invalidation: [level]
-Zone: [demand/supply zone details]
-
-STEP 8 — Log the trade
+STEP 7 — Log the trade
 - Call trade_log with all signal details
 PROMPT
 
@@ -194,15 +116,15 @@ PROMPT
           while [ $RETRY -lt $MAX_RETRIES ]; do
             RETRY=$((RETRY + 1))
             echo "[DEBUG $(date)] Recheck attempt $RETRY starting..." >> /tmp/oscar_debug.log
-            WAIT_MINS=10
+            WAIT_MINS=5
             ~/oscar_notify.sh "⏰ WAIT signal detected. Oscar will recheck $RECHECK_SYMBOL in ${WAIT_MINS} mins (attempt $RETRY/$MAX_RETRIES)..."
             sleep $((WAIT_MINS * 60))
             ~/oscar_notify.sh "🔄 Rechecking $RECHECK_SYMBOL now..."
             RECHK_FILE=$(mktemp /tmp/oscar_rechk_XXXXXX.txt)
             cat > "$RECHK_FILE" << RPROMPT
-You are Oscar. Recheck $RECHECK_SYMBOL for a trade signal. IMPORTANT: Fetch the live price twice with a 5-second gap. If the two readings differ by more than 1%, wait 10 more seconds and fetch again — chart may still be loading. Only analyse once price is stable. Use the same MTF workflow. If signal is still WAIT say "STILL WAIT". If BUY or SELL found, give the full signal with entry, TP1, TP2, SL.
+You are Oscar. Recheck $RECHECK_SYMBOL. Call chart_set_symbol, then quote_get twice 5 seconds apart. Call rules_mtf_analysis. If gate_blocked is true output exactly: "⏳ STILL WAIT — Confluence [score]/10 below minimum (8/10). No trade." and nothing else. If gate_blocked is false, call rules_suggest_sl, rules_check_trade, then output the full signal in the standard format.
 RPROMPT
-            RECHK_REPLY=$(cd ~/tradingview-mcp && timeout 720 $CLAUDE -p "$(cat $RECHK_FILE)" --allowedTools "chart_set_symbol,quote_get,rules_no_trade_check,rules_mtf_analysis,rules_suggest_sl,rules_check_trade,trade_log,data_get_ohlcv,chart_set_timeframe" 2>/dev/null)
+            RECHK_REPLY=$(cd ~/tradingview-mcp && timeout 720 $CLAUDE -p "$(cat $RECHK_FILE)" --allowedTools "chart_set_symbol,quote_get,rules_no_trade_check,rules_mtf_analysis,rules_suggest_sl,rules_check_trade,trade_log" 2>/dev/null)
             rm -f "$RECHK_FILE"
             if [ -z "$RECHK_REPLY" ]; then
               RECHK_REPLY="❌ Recheck timed out."
