@@ -8,7 +8,25 @@
     "alts": [
       "BYBIT:LINKUSDT",
       "BYBIT:AVAXUSDT",
-      "BYBIT:SUIUSDT"
+      "BYBIT:SUIUSDT",
+      "BYBIT:LABUSDT",
+      "BYBIT:ONDOUSDT",
+      "BYBIT:1000PEPEUSDT",
+      "BYBIT:ALGOUSDT",
+      "BYBIT:SEIUSDT",
+      "BYBIT:JTOUSDT",
+      "BYBIT:RENDERUSDT",
+      "BYBIT:LTCUSDT",
+      "BYBIT:VVVUSDT",
+      "BYBIT:WIFUSDT",
+      "BYBIT:ATOMUSDT",
+      "BYBIT:MNTUSDT",
+      "BYBIT:WLFIUSDT",
+      "BYBIT:RAVEUSDT",
+      "BYBIT:PLUMEUSDT",
+      "BYBIT:SPXUSDT",
+      "BYBIT:CFGUSDT",
+      "BYBIT:BATUSDT"
     ],
     "macro": [
       "CRYPTOCAP:TOTAL",

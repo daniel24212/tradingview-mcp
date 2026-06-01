@@ -139,7 +139,7 @@ export function registerRulesTools(server) {
         resistance_level: r.trendlines?.resistance?.level ?? '-', resistance_pos: r.trendlines?.resistance?.position ?? '-',
       }));
       // ── Hard gate: block signals below 8/10 ─────────────────────────────
-      if (verdict.numeric_score < 8) {
+      if (verdict.numeric_score < 7) {
         return jsonResult({
           success: true,
           gate_blocked: true,
@@ -147,7 +147,7 @@ export function registerRulesTools(server) {
           confluence_score: `${verdict.numeric_score}/10`,
           numeric_score: verdict.numeric_score,
           avg_rsi: verdict.avg_rsi,
-          instruction: `⛔ HARD STOP. Score ${verdict.numeric_score}/10 is below minimum (8/10). You MUST output exactly: "⏳ WAIT — Confluence ${verdict.numeric_score}/10 below minimum (8/10). No trade." — nothing else. No entry. No SL. No TP. No scorecard. No options A/B.`,
+          instruction: `⛔ HARD STOP. Score ${verdict.numeric_score}/10 is below minimum (7/10). You MUST output exactly: "⏳ WAIT — Confluence ${verdict.numeric_score}/10 below minimum (7/10). No trade." — nothing else. No entry. No SL. No TP. No scorecard. No options A/B.`,
         });
       }
       return jsonResult({ success: true, symbol: symbol || 'current chart', verdict: verdict.signal, strength: verdict.strength, confluence_score: verdict.confluence_score, numeric_score: verdict.numeric_score, gate_blocked: false, advice: verdict.advice, no_trade_warning: noTrade.warnings?.length ? noTrade.warnings : null, timeframe_breakdown: summary, raw: results });
