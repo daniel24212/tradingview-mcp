@@ -26,7 +26,17 @@
       "BYBIT:PLUMEUSDT",
       "BYBIT:SPXUSDT",
       "BYBIT:CFGUSDT",
-      "BYBIT:BATUSDT"
+      "BYBIT:BATUSDT",
+      "BYBIT:BONKUSDT",
+      "BYBIT:HYPEUSDT",
+      "BYBIT:PENGUUSDT",
+      "BYBIT:WLDUSDT",
+      "BYBIT:ADAUSDT",
+      "BYBIT:NEARUSDT",
+      "BYBIT:LITUSDT",
+      "BYBIT:KNTQUSDT",
+      "BYBIT:XLMUSDT",
+      "BYBIT:ENAUSDT"
     ],
     "macro": [
       "CRYPTOCAP:TOTAL",
