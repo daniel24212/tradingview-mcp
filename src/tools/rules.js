@@ -53,6 +53,21 @@ function buildVerdict(results) {
   const tlAligned = results.filter(r => r.trendline_signal === direction).length;
   if (tlAligned >= total * 0.75) score += 2;
   else if (tlAligned >= total * 0.5) score += 1;
+
+  // ── 5. Weekly EMA position — Breakout vs Deviation (max 2 pts) ───────────
+  const weeklyAbove = results.some(r => r.metrics?.above_weekly_ema12 === true && r.metrics?.above_weekly_ema25 === true);
+  const weeklyBelow = results.some(r => r.metrics?.above_weekly_ema12 === false && r.metrics?.above_weekly_ema25 === false);
+  const retestCount = results[0]?.metrics?.range_high_retests ?? null;
+
+  if (weeklyAbove && direction === 'bullish')  score += 2;  // Breakout territory — buy the range high break
+  else if (weeklyBelow && direction === 'bearish') score += 2;  // Deviation territory — fade the range high
+  else if (weeklyAbove && direction === 'bearish') score -= 1;  // Shorting into weekly strength — penalise
+  else if (weeklyBelow && direction === 'bullish') score -= 1;  // Buying into weekly weakness — penalise
+
+  // ── Deviation confirmation: 3rd retest of Range High + below Weekly EMAs ──
+  const isDeviation = weeklyBelow && retestCount !== null && retestCount >= 2 && direction === 'bearish';
+  if (isDeviation) score = Math.max(score, 8);  // Confirmed deviation = force min 8/10
+
   score = Math.min(10, score);
   const rsiBlocked = avgRsi !== null && (
     (direction === 'bearish' && avgRsi < 35) ||
@@ -62,17 +77,17 @@ function buildVerdict(results) {
   const allAligned = alignedPct >= 1.0;
   const rsiNote = avgRsi != null ? ` RSI avg: ${avgRsi.toFixed(1)}.` : '';
   if (passes && allAligned && direction === 'bullish')
-    return { signal: 'STRONG BUY', strength: 'high', confluence_score: `${score}/10`, numeric_score: score, breakdown: scores, avg_rsi: avgRsi?.toFixed(1) ?? null, rsi_blocked: false, advice: `All TFs bullish. Score ${score}/10.${rsiNote} Wait for 5M bullish candle close.` };
+    return { signal: 'STRONG BUY', is_deviation: isDeviation ?? false, strength: 'high', confluence_score: `${score}/10`, numeric_score: score, breakdown: scores, avg_rsi: avgRsi?.toFixed(1) ?? null, rsi_blocked: false, advice: `All TFs bullish. Score ${score}/10.${rsiNote} Wait for 5M bullish candle close.` };
   if (passes && allAligned && direction === 'bearish')
-    return { signal: 'STRONG SELL', strength: 'high', confluence_score: `${score}/10`, numeric_score: score, breakdown: scores, avg_rsi: avgRsi?.toFixed(1) ?? null, rsi_blocked: false, advice: `All TFs bearish. Score ${score}/10.${rsiNote} Wait for 5M bearish candle close.` };
+    return { signal: 'STRONG SELL', is_deviation: isDeviation ?? false, strength: 'high', confluence_score: `${score}/10`, numeric_score: score, breakdown: scores, avg_rsi: avgRsi?.toFixed(1) ?? null, rsi_blocked: false, advice: `All TFs bearish. Score ${score}/10.${rsiNote} Wait for 5M bearish candle close.` };
   if (passes && !allAligned && direction === 'bullish')
-    return { signal: 'BUY', strength: 'medium', confluence_score: `${score}/10`, numeric_score: score, breakdown: scores, avg_rsi: avgRsi?.toFixed(1) ?? null, rsi_blocked: false, advice: `High confluence BUY (${score}/10).${rsiNote} Wait for 15M confirmation.` };
+    return { signal: 'BUY', is_deviation: isDeviation ?? false, strength: 'medium', confluence_score: `${score}/10`, numeric_score: score, breakdown: scores, avg_rsi: avgRsi?.toFixed(1) ?? null, rsi_blocked: false, advice: `High confluence BUY (${score}/10).${rsiNote} Wait for 15M confirmation.` };
   if (passes && !allAligned && direction === 'bearish')
-    return { signal: 'SELL', strength: 'medium', confluence_score: `${score}/10`, numeric_score: score, breakdown: scores, avg_rsi: avgRsi?.toFixed(1) ?? null, rsi_blocked: false, advice: `High confluence SELL (${score}/10).${rsiNote} Wait for 15M confirmation.` };
+    return { signal: 'SELL', is_deviation: isDeviation ?? false, strength: 'medium', confluence_score: `${score}/10`, numeric_score: score, breakdown: scores, avg_rsi: avgRsi?.toFixed(1) ?? null, rsi_blocked: false, advice: `High confluence SELL (${score}/10).${rsiNote} Wait for 15M confirmation.` };
   const reason = rsiBlocked
     ? `RSI ${avgRsi?.toFixed(1)} extreme — ${direction === 'bearish' ? 'oversold: do not short' : 'overbought: do not buy'}`
     : `Score ${score}/10 below minimum (8). ${alignedPct < 0.75 ? 'TFs not aligned.' : 'RSI/EMA/trendline weak.'}`;
-  return { signal: 'WAIT', strength: 'low', confluence_score: `${score}/10`, numeric_score: score, breakdown: scores, avg_rsi: avgRsi?.toFixed(1) ?? null, rsi_blocked: rsiBlocked, advice: `No trade. ${reason}` };
+  return { signal: 'WAIT', strength: 'low', confluence_score: `${score}/10`, numeric_score: score, breakdown: scores, avg_rsi: avgRsi?.toFixed(1) ?? null, rsi_blocked: rsiBlocked, is_deviation: isDeviation ?? false, advice: `No trade. ${reason}` };
 }
 // Ensure crypto symbols use BYBIT: prefix for real exchange data
 // Avoids TradingView defaulting to CFD/synthetic feeds (volume=0)
